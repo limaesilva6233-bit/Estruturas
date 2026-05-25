@@ -123,41 +123,35 @@ if arquivo_imagem is not None:
                 ss.add_support_fixed(node_id=1)
                 ss.add_support_hinged(node_id=num_nos_reais)
 
-            # 2. APLICAÇÃO DE CARGA DISTRIBUÍDA
+            # 2. APLICAÇÃO DE CARGA DISTRIBUÍDA (Tentativas mapeadas)
             if tem_distribuida and val_q != 0:
-                metodos_q = ['q_load', 'add_distributed_load']
-                sucesso_q = False
-                for m in metodos_q:
-                    if hasattr(ss, m):
-                        getattr(ss, m)(element_id=2, q=val_q)
-                        sucesso_q = True
-                        break
-                if not sucesso_q:
-                    # Tentativa forçada caso mude radicalmente
-                    try: ss.q_load(element_id=2, q=val_q)
-                    except Exception: ss.add_distributed_load(element_id=2, q=val_q)
+                try:
+                    ss.q_load(element_id=2, q=val_q)
+                except AttributeError:
+                    try:
+                        ss.add_distributed_load(element_id=2, q=val_q)
+                    except AttributeError:
+                        st.error("Não foi possível aplicar a carga distribuída. Método não encontrado.")
 
-            # 3. APLICAÇÃO DE CARGA PONTUAL
+            # 3. APLICAÇÃO DE CARGA PONTUAL (Corrigido para usar as variações de point_load)
             idx_no_carga = int(no_carga.split(" ")[1])
             if val_fx != 0 or val_fy != 0:
-                metodos_p = ['add_node_q', 'add_point_load', 'add_node_load']
-                sucesso_p = False
-                for m in metodos_p:
-                    if hasattr(ss, m):
-                        # Caso o método seja add_node_q ou add_node_load, os parâmetros costumam ser Fx, Fy
+                try:
+                    # Método padrão tradicional para nós em versões estáveis
+                    ss.point_load(node_id=idx_no_carga, Fx=val_fx, Fy=val_fy)
+                except AttributeError:
+                    try:
+                        ss.add_point_load(node_id=idx_no_carga, Fx=val_fx, Fy=val_fy)
+                    except AttributeError:
                         try:
-                            getattr(ss, m)(node_id=idx_no_carga, Fx=val_fx, Fy=val_fy)
-                            sucesso_p = True
-                            break
-                        except TypeError:
-                            continue
-                if not sucesso_p:
-                    ss.add_node_q(node_id=idx_no_carga, Fx=val_fx, Fy=val_fy)
+                            ss.add_node_load(node_id=idx_no_carga, Fx=val_fx, Fy=val_fy)
+                        except AttributeError as e:
+                            st.error(f"Erro nos métodos de carga pontual: {e}")
 
             # 4. RESOLVER SISTEMA
             ss.solve()
 
-            # 5. PLOTAGEM DOS DIAGRAMAS (Protegido contra erros de plot)
+            # 5. PLOTAGEM DOS DIAGRAMAS
             st.subheader("📊 Diagramas de Esforços Solicitantes Obtidos")
             g1, g2, g3 = st.columns(3)
             
@@ -167,11 +161,13 @@ if arquivo_imagem is not None:
                     fig, ax = plt.subplots()
                     ss.plot_bending_moment(show=False, ax=ax)
                     st.pyplot(fig)
-                except Exception as e_plot:
-                    st.warning(f"Não foi possível plotar o gráfico de momento de forma customizada: {e_plot}")
-                    # Tentativa padrão pura da biblioteca
-                    ss.plot_bending_moment()
-                    st.pyplot()
+                except Exception:
+                    try:
+                        # Fallback simples sem passar eixos customizados
+                        ss.plot_bending_moment()
+                        st.pyplot()
+                    except Exception as e:
+                        st.warning(f"Erro ao renderizar gráfico de momento: {e}")
             
             with g2:
                 st.write("**Esforço Cortante (V)**")
@@ -179,8 +175,12 @@ if arquivo_imagem is not None:
                     fig, ax = plt.subplots()
                     ss.plot_shear_force(show=False, ax=ax)
                     st.pyplot(fig)
-                except Exception as e_plot:
-                    st.warning(f"Não foi possível plotar o esforço cortante: {e_plot}")
+                except Exception:
+                    try:
+                        ss.plot_shear_force()
+                        st.pyplot()
+                    except Exception as e:
+                        st.warning(f"Erro ao renderizar gráfico de cortante: {e}")
             
             with g3:
                 st.write("**Esforço Axial / Normal (N)**")
@@ -188,15 +188,21 @@ if arquivo_imagem is not None:
                     fig, ax = plt.subplots()
                     ss.plot_axial_force(show=False, ax=ax)
                     st.pyplot(fig)
-                except Exception as e_plot:
-                    st.warning(f"Não foi possível plotar o esforço axial: {e_plot}")
+                except Exception:
+                    try:
+                        ss.plot_axial_force()
+                        st.pyplot()
+                    except Exception as e:
+                        st.warning(f"Erro ao renderizar gráfico axial: {e}")
                 
             st.success("🎯 Deslocamentos dos Nós Calculados (Vetor U):")
-            for node in ss.get_node_displacements():
-                st.write(f"**Nó {node['id']}:** Ux = {node['ux']:.4f} m | Uy = {node['uy']:.4f} m | Rotação θz = {node['phi']:.4f} rad")
+            try:
+                for node in ss.get_node_displacements():
+                    st.write(f"**Nó {node['id']}:** Ux = {node['ux']:.4f} m | Uy = {node['uy']:.4f} m | Rotação θz = {node['phi']:.4f} rad")
+            except Exception:
+                st.info("Não foi possível listar o vetor de deslocamentos detalhado nesta versão da biblioteca.")
 
         except Exception as erro:
-            # Captura e exibe o erro completo com detalhes técnicos na tela
             st.error("❌ Ocorreu um erro interno no cálculo estrutural:")
             st.exception(erro)
 else:
