@@ -144,7 +144,10 @@ if arquivo_imagem is not None:
                 
                 # Carga distribuída atua na viga superior (elemento 2)
                 if tem_distribuida and val_q != 0:
-                    ss.add_distributed_load(element_id=2, q=val_q)
+                    try:
+                        ss.q_load(element_id=2, q=val_q)
+                    except AttributeError:
+                        ss.add_distributed_load(element_id=2, q=val_q)
                     
             else:
                 # Fallback genérico de viga contínua reta se você mudar o número de nós
