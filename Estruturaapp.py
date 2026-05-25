@@ -123,7 +123,7 @@ if arquivo_imagem is not None:
                 ss.add_support_fixed(node_id=1)
                 ss.add_support_hinged(node_id=num_nos_reais)
 
-            # 2. APLICAÇÃO DE CARGA DISTRIBUÍDA (Tentativas mapeadas)
+            # 2. APLICAÇÃO DE CARGA DISTRIBUÍDA
             if tem_distribuida and val_q != 0:
                 try:
                     ss.q_load(element_id=2, q=val_q)
@@ -131,13 +131,12 @@ if arquivo_imagem is not None:
                     try:
                         ss.add_distributed_load(element_id=2, q=val_q)
                     except AttributeError:
-                        st.error("Não foi possível aplicar a carga distribuída. Método não encontrado.")
+                        st.error("Não foi possível aplicar a carga distribuída.")
 
-            # 3. APLICAÇÃO DE CARGA PONTUAL (Corrigido para usar as variações de point_load)
+            # 3. APLICAÇÃO DE CARGA PONTUAL
             idx_no_carga = int(no_carga.split(" ")[1])
             if val_fx != 0 or val_fy != 0:
                 try:
-                    # Método padrão tradicional para nós em versões estáveis
                     ss.point_load(node_id=idx_no_carga, Fx=val_fx, Fy=val_fy)
                 except AttributeError:
                     try:
@@ -151,7 +150,7 @@ if arquivo_imagem is not None:
             # 4. RESOLVER SISTEMA
             ss.solve()
 
-            # 5. PLOTAGEM DOS DIAGRAMAS
+            # 5. PLOTAGEM DOS DIAGRAMAS (Utilizando plot_diagram para compatibilidade)
             st.subheader("📊 Diagramas de Esforços Solicitantes Obtidos")
             g1, g2, g3 = st.columns(3)
             
@@ -159,48 +158,51 @@ if arquivo_imagem is not None:
                 st.write("**Momento Fletor (M)**")
                 try:
                     fig, ax = plt.subplots()
-                    ss.plot_bending_moment(show=False, ax=ax)
+                    ss.plot_diagram(type='bending_moment', ax=ax, show=False)
                     st.pyplot(fig)
                 except Exception:
                     try:
-                        # Fallback simples sem passar eixos customizados
-                        ss.plot_bending_moment()
+                        ss.plot_diagram(type='bending_moment')
                         st.pyplot()
                     except Exception as e:
-                        st.warning(f"Erro ao renderizar gráfico de momento: {e}")
+                        st.warning(f"Não suportado nesta versão: {e}")
             
             with g2:
                 st.write("**Esforço Cortante (V)**")
                 try:
                     fig, ax = plt.subplots()
-                    ss.plot_shear_force(show=False, ax=ax)
+                    ss.plot_diagram(type='shear_force', ax=ax, show=False)
                     st.pyplot(fig)
                 except Exception:
                     try:
-                        ss.plot_shear_force()
+                        ss.plot_diagram(type='shear_force')
                         st.pyplot()
                     except Exception as e:
-                        st.warning(f"Erro ao renderizar gráfico de cortante: {e}")
+                        st.warning(f"Não suportado nesta versão: {e}")
             
             with g3:
                 st.write("**Esforço Axial / Normal (N)**")
                 try:
                     fig, ax = plt.subplots()
-                    ss.plot_axial_force(show=False, ax=ax)
+                    ss.plot_diagram(type='axial_force', ax=ax, show=False)
                     st.pyplot(fig)
                 except Exception:
                     try:
-                        ss.plot_axial_force()
+                        ss.plot_diagram(type='axial_force')
                         st.pyplot()
                     except Exception as e:
-                        st.warning(f"Erro ao renderizar gráfico axial: {e}")
+                        st.warning(f"Não suportado nesta versão: {e}")
                 
-            st.success("🎯 Deslocamentos dos Nós Calculados (Vetor U):")
+            # Exibir reações de apoio para ajudar na validação
+            st.markdown("---")
+            st.success("🎯 Reações de Apoio Encontradas:")
             try:
-                for node in ss.get_node_displacements():
-                    st.write(f"**Nó {node['id']}:** Ux = {node['ux']:.4f} m | Uy = {node['uy']:.4f} m | Rotação θz = {node['phi']:.4f} rad")
+                for i in [1, 4]:
+                    if i in ss.reaction_forces:
+                        react = ss.reaction_forces[i]
+                        st.write(f"**Nó {i} (Apoio):** Rx = {react[0]:.2f} kN | Ry = {react[1]:.2f} kN")
             except Exception:
-                st.info("Não foi possível listar o vetor de deslocamentos detalhado nesta versão da biblioteca.")
+                pass
 
         except Exception as erro:
             st.error("❌ Ocorreu um erro interno no cálculo estrutural:")
